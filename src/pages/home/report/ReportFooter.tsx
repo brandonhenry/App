@@ -1,5 +1,5 @@
 import lodashIsEqual from 'lodash/isEqual';
-import React, {memo, useCallback, useRef, useState} from 'react';
+import React, {memo, useCallback, useEffect, useRef} from 'react';
 import {Keyboard, View} from 'react-native';
 import {withOnyx} from 'react-native-onyx';
 import type {OnyxEntry} from 'react-native-onyx';
@@ -20,8 +20,8 @@ import ONYXKEYS from '@src/ONYXKEYS';
 import type * as OnyxTypes from '@src/types/onyx';
 import type {PendingAction} from '@src/types/onyx/OnyxCommon';
 import type {EmptyObject} from '@src/types/utils/EmptyObject';
+import { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import RNView from '@components/RNView';
-import Animated, {useAnimatedStyle, useSharedValue, withTiming} from 'react-native-reanimated';
 import ReportActionCompose from './ReportActionCompose/ReportActionCompose';
 
 type ReportFooterOnyxProps = {
@@ -55,7 +55,6 @@ type ReportFooterProps = ReportFooterOnyxProps & {
     isComposerFullSize?: boolean;
 };
 
-
 function ReportFooter({
     lastReportAction,
     pendingAction,
@@ -74,27 +73,44 @@ function ReportFooter({
     const isArchivedRoom = ReportUtils.isArchivedRoom(report);
     const isAnonymousUser = session?.authTokenType === CONST.AUTH_TOKEN_TYPES.ANONYMOUS;
 
-    const mainComposerVisible = useSharedValue(1);
+    const isSmallSizeLayout = windowWidth - (isSmallScreenWidth ? 0 : variables.sideBarWidth) < variables.anonymousReportFooterBreakpoint;
+    const hideComposer = !ReportUtils.canUserPerformWriteAction(report);
+
+    const mainComposerVisible = useSharedValue(shouldShowComposeInput ? 1 : 0);
+    const mainComposerRef = useRef(null);
     const mainComposerHeight = useRef(0);
 
     const mainComposerStyle = useAnimatedStyle(() => ({
         overflow: 'hidden',
         opacity: mainComposerVisible.value,
-        height: mainComposerVisible.value * mainComposerHeight.current,
+        height: mainComposerVisible.value * (mainComposerHeight.current || CONST.CHAT_FOOTER_MIN_HEIGHT),
     }));
 
-    const mainComposerRef = useRef(null);
-
-    const measureComposerHeight = useCallback(() => {
-        if (!mainComposerRef.current) {return;}
-        mainComposerRef.current.measure((x, y, width, height) => {
-            mainComposerHeight.current = height;
+    const animateMainComposer = useCallback((toValue: number) => {
+        mainComposerVisible.value = withTiming(toValue, {
+            duration: CONST.ANIMATED_TRANSITION,
+            easing: Easing.inOut(Easing.ease),
         });
     }, []);
 
-    const isSmallSizeLayout = windowWidth - (isSmallScreenWidth ? 0 : variables.sideBarWidth) < variables.anonymousReportFooterBreakpoint;
-    const hideComposer = !ReportUtils.canUserPerformWriteAction(report);
-  
+    const measureComposerHeight = useCallback(() => {
+        if (!mainComposerRef.current) {
+            return;
+        }
+        mainComposerRef.current.measure((x, y, width, height) => {
+            mainComposerHeight.current = height;
+        });
+        
+    }, []);
+
+    useEffect(() => {
+        measureComposerHeight();
+    }, [measureComposerHeight]);
+
+    useEffect(() => {
+        animateMainComposer(shouldShowComposeInput ? 1 : 0);
+    }, [shouldShowComposeInput, animateMainComposer]);
+
     const allPersonalDetails = usePersonalDetails();
 
     const handleCreateTask = useCallback(
@@ -152,32 +168,22 @@ function ReportFooter({
                     {!isSmallScreenWidth && <View style={styles.offlineIndicatorRow}>{hideComposer && <OfflineIndicator containerStyles={[styles.chatItemComposeSecondaryRow]} />}</View>}
                 </View>
             )}
-            {!hideComposer && (!!shouldShowComposeInput || !isSmallScreenWidth) && (
-                <RNView
-                ref={mainComposerRef}
-                onLayout={measureComposerHeight}
-                style={[chatFooterStyles, isComposerFullSize && styles.chatFooterFullCompose, mainComposerStyle]}>
-                    <SwipeableView onSwipeDown={Keyboard.dismiss}>
-                        <ReportActionCompose
-                            // @ts-expect-error TODO: Remove this once ReportActionCompose (https://github.com/Expensify/App/issues/31984) is migrated to TypeScript.
-                            onSubmit={onSubmitComment}
-                            reportID={report.reportID}
-                            report={report}
-                            isEmptyChat={isEmptyChat}
-                            lastReportAction={lastReportAction}
-                            pendingAction={pendingAction}
-                            isComposerFullSize={isComposerFullSize}
-                            listHeight={listHeight}
-                            isReportReadyForDisplay={isReportReadyForDisplay}
-                            onFocus={() => {
-                                mainComposerVisible.value = withTiming(0, {
-                                  duration: CONST.ANIMATED_TRANSITION,
-                                });
-                            }}
-                        />
-                    </SwipeableView>
-                </RNView>
-            )}
+            <RNView style={[mainComposerStyle, chatFooterStyles, isComposerFullSize && styles.chatFooterFullCompose]}>
+                <SwipeableView onSwipeDown={Keyboard.dismiss}>
+                    <ReportActionCompose
+                        // @ts-expect-error TODO: Remove this once ReportActionCompose (https://github.com/Expensify/App/issues/31984) is migrated to TypeScript.
+                        onSubmit={onSubmitComment}
+                        reportID={report.reportID}
+                        report={report}
+                        isEmptyChat={isEmptyChat}
+                        lastReportAction={lastReportAction}
+                        pendingAction={pendingAction}
+                        isComposerFullSize={isComposerFullSize}
+                        listHeight={listHeight}
+                        isReportReadyForDisplay={isReportReadyForDisplay}
+                    />
+                </SwipeableView>
+            </RNView>
         </>
     );
 }
