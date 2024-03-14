@@ -72,11 +72,13 @@ function ReportFooter({
     const chatFooterStyles = {...styles.chatFooter, minHeight: !isOffline ? CONST.CHAT_FOOTER_MIN_HEIGHT : 0};
     const isArchivedRoom = ReportUtils.isArchivedRoom(report);
     const isAnonymousUser = session?.authTokenType === CONST.AUTH_TOKEN_TYPES.ANONYMOUS;
+    
 
     const isSmallSizeLayout = windowWidth - (isSmallScreenWidth ? 0 : variables.sideBarWidth) < variables.anonymousReportFooterBreakpoint;
     const hideComposer = !ReportUtils.canUserPerformWriteAction(report);
+    const shouldComposerBeVisible = !hideComposer && (!!shouldShowComposeInput || !isSmallScreenWidth;
 
-    const mainComposerVisible = useSharedValue(shouldShowComposeInput ? 1 : 0);
+    const mainComposerVisible = useSharedValue(shouldComposerBeVisible ? 1 : 0);
     const mainComposerRef = useRef(null);
     const mainComposerHeight = useRef(0);
 
@@ -108,8 +110,8 @@ function ReportFooter({
     }, [measureComposerHeight]);
 
     useEffect(() => {
-        animateMainComposer(shouldShowComposeInput ? 1 : 0);
-    }, [shouldShowComposeInput, animateMainComposer]);
+        animateMainComposer(shouldComposerBeVisible ? 1 : 0);
+    }, [shouldComposerBeVisible, animateMainComposer]);
 
     const allPersonalDetails = usePersonalDetails();
 
