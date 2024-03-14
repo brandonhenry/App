@@ -76,7 +76,7 @@ function ReportFooter({
 
     const isSmallSizeLayout = windowWidth - (isSmallScreenWidth ? 0 : variables.sideBarWidth) < variables.anonymousReportFooterBreakpoint;
     const hideComposer = !ReportUtils.canUserPerformWriteAction(report);
-    const shouldComposerBeVisible = !hideComposer && (!!shouldShowComposeInput || !isSmallScreenWidth;
+    const shouldComposerBeVisible = !hideComposer && (!!shouldShowComposeInput || !isSmallScreenWidth);
 
     const mainComposerVisible = useSharedValue(shouldComposerBeVisible ? 1 : 0);
     const mainComposerRef = useRef(null);
