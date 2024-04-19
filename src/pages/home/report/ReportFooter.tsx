@@ -1,5 +1,5 @@
 import lodashIsEqual from 'lodash/isEqual';
-import React, {memo, useCallback} from 'react';
+import React, {memo, useCallback, useEffect, useRef} from 'react';
 import {Keyboard, View} from 'react-native';
 import {withOnyx} from 'react-native-onyx';
 import type {OnyxEntry} from 'react-native-onyx';
@@ -20,6 +20,8 @@ import ONYXKEYS from '@src/ONYXKEYS';
 import type * as OnyxTypes from '@src/types/onyx';
 import type {PendingAction} from '@src/types/onyx/OnyxCommon';
 import type {EmptyObject} from '@src/types/utils/EmptyObject';
+import { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import RNView from '@components/RNView';
 import ReportActionCompose from './ReportActionCompose/ReportActionCompose';
 
 type ReportFooterOnyxProps = {
@@ -70,9 +72,46 @@ function ReportFooter({
     const chatFooterStyles = {...styles.chatFooter, minHeight: !isOffline ? CONST.CHAT_FOOTER_MIN_HEIGHT : 0};
     const isArchivedRoom = ReportUtils.isArchivedRoom(report);
     const isAnonymousUser = session?.authTokenType === CONST.AUTH_TOKEN_TYPES.ANONYMOUS;
+    
 
     const isSmallSizeLayout = windowWidth - (isSmallScreenWidth ? 0 : variables.sideBarWidth) < variables.anonymousReportFooterBreakpoint;
     const hideComposer = !ReportUtils.canUserPerformWriteAction(report);
+    const shouldComposerBeVisible = !hideComposer && (!!shouldShowComposeInput || !isSmallScreenWidth);
+
+    const mainComposerVisible = useSharedValue(shouldComposerBeVisible ? 1 : 0);
+    const mainComposerRef = useRef(null);
+    const mainComposerHeight = useRef(0);
+
+    const mainComposerStyle = useAnimatedStyle(() => ({
+        overflow: 'hidden',
+        opacity: mainComposerVisible.value,
+        height: mainComposerVisible.value * (mainComposerHeight.current || CONST.CHAT_FOOTER_MIN_HEIGHT),
+    }));
+
+    const animateMainComposer = useCallback((toValue: number) => {
+        mainComposerVisible.value = withTiming(toValue, {
+            duration: CONST.ANIMATED_TRANSITION,
+            easing: Easing.inOut(Easing.ease),
+        });
+    }, []);
+
+    const measureComposerHeight = useCallback(() => {
+        if (!mainComposerRef.current) {
+            return;
+        }
+        mainComposerRef.current.measure((x, y, width, height) => {
+            mainComposerHeight.current = height;
+        });
+        
+    }, []);
+
+    useEffect(() => {
+        measureComposerHeight();
+    }, [measureComposerHeight]);
+
+    useEffect(() => {
+        animateMainComposer(shouldComposerBeVisible ? 1 : 0);
+    }, [shouldComposerBeVisible, animateMainComposer]);
 
     const allPersonalDetails = usePersonalDetails();
 
@@ -131,24 +170,22 @@ function ReportFooter({
                     {!isSmallScreenWidth && <View style={styles.offlineIndicatorRow}>{hideComposer && <OfflineIndicator containerStyles={[styles.chatItemComposeSecondaryRow]} />}</View>}
                 </View>
             )}
-            {!hideComposer && (!!shouldShowComposeInput || !isSmallScreenWidth) && (
-                <View style={[chatFooterStyles, isComposerFullSize && styles.chatFooterFullCompose]}>
-                    <SwipeableView onSwipeDown={Keyboard.dismiss}>
-                        <ReportActionCompose
-                            // @ts-expect-error TODO: Remove this once ReportActionCompose (https://github.com/Expensify/App/issues/31984) is migrated to TypeScript.
-                            onSubmit={onSubmitComment}
-                            reportID={report.reportID}
-                            report={report}
-                            isEmptyChat={isEmptyChat}
-                            lastReportAction={lastReportAction}
-                            pendingAction={pendingAction}
-                            isComposerFullSize={isComposerFullSize}
-                            listHeight={listHeight}
-                            isReportReadyForDisplay={isReportReadyForDisplay}
-                        />
-                    </SwipeableView>
-                </View>
-            )}
+            <RNView style={[mainComposerStyle, chatFooterStyles, isComposerFullSize && styles.chatFooterFullCompose]}>
+                <SwipeableView onSwipeDown={Keyboard.dismiss}>
+                    <ReportActionCompose
+                        // @ts-expect-error TODO: Remove this once ReportActionCompose (https://github.com/Expensify/App/issues/31984) is migrated to TypeScript.
+                        onSubmit={onSubmitComment}
+                        reportID={report.reportID}
+                        report={report}
+                        isEmptyChat={isEmptyChat}
+                        lastReportAction={lastReportAction}
+                        pendingAction={pendingAction}
+                        isComposerFullSize={isComposerFullSize}
+                        listHeight={listHeight}
+                        isReportReadyForDisplay={isReportReadyForDisplay}
+                    />
+                </SwipeableView>
+            </RNView>
         </>
     );
 }
